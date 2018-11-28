@@ -4,6 +4,7 @@
 #include <ctime>
 #include <math.h>
 #include <iostream>
+#include <vector>
 
 #ifdef __APPLE__
 #include <GLUT/glut.h>
@@ -32,6 +33,7 @@ float x=0.0f, z=5.0f;
 //when no key is being presses
 float deltaAngle = 0.0f;
 float deltaMove = 0;
+float yMove = 0;
 int xOrigin = -1;
 
 //Flag for pseudo random
@@ -40,7 +42,8 @@ bool flippedDirection = false;
 //Flag to create planet once
 bool planetCreated = false;
 
-double randNum = 0;
+// double randNum = 0;
+vector <double> randNums;
 
 //Changeable parameters
 float radio;
@@ -56,121 +59,114 @@ float noiseParameter;
 
 //Functions to convert from RGB to HSV and from HSV to RGB
 
-typedef struct {
-    double r;       // a fraction between 0 and 1
-    double g;       // a fraction between 0 and 1
-    double b;       // a fraction between 0 and 1
-} rgb;
-
-typedef struct {
-    double h;       // angle in degrees
-    double s;       // a fraction between 0 and 1
-    double v;       // a fraction between 0 and 1
-} hsv;
-
-static hsv   rgb2hsv(rgb in);
-static rgb   hsv2rgb(hsv in);
-
-hsv rgb2hsv(rgb in)
+class RGB
 {
-    hsv         out;
-    double      min, max, delta;
+public:
+	unsigned char R;
+	unsigned char G;
+	unsigned char B;
 
-    min = in.r < in.g ? in.r : in.g;
-    min = min  < in.b ? min  : in.b;
+	RGB(unsigned char r, unsigned char g, unsigned char b)
+	{
+		R = r;
+		G = g;
+		B = b;
+	}
 
-    max = in.r > in.g ? in.r : in.g;
-    max = max  > in.b ? max  : in.b;
+	bool Equals(RGB rgb)
+	{
+		return (R == rgb.R) && (G == rgb.G) && (B == rgb.B);
+	}
+};
 
-    out.v = max;
-    delta = max - min;
-    if (delta < 0.00001)
-    {
-        out.s = 0;
-        out.h = 0; // undefined, maybe nan?
-        return out;
-    }
-    if( max > 0.0 ) { // NOTE: if Max is == 0, this divide would cause a crash
-        out.s = (delta / max);                  // s
-    } else {
-        // if max is 0, then r = g = b = 0
-        // s = 0, h is undefined
-        out.s = 0.0;
-        out.h = NAN;                            // its now undefined
-        return out;
-    }
-    if( in.r >= max )                           // > is bogus, just keeps compilor happy
-        out.h = ( in.g - in.b ) / delta;        // between yellow & magenta
-    else
-    if( in.g >= max )
-        out.h = 2.0 + ( in.b - in.r ) / delta;  // between cyan & yellow
-    else
-        out.h = 4.0 + ( in.r - in.g ) / delta;  // between magenta & cyan
-
-    out.h *= 60.0;                              // degrees
-
-    if( out.h < 0.0 )
-        out.h += 360.0;
-
-    return out;
-}
-
-
-rgb hsv2rgb(hsv in)
+class HSV
 {
-    double      hh, p, q, t, ff;
-    long        i;
-    rgb         out;
+public:
+	double H;
+	double S;
+	double V;
 
-    if(in.s <= 0.0) {       // < is bogus, just shuts up warnings
-        out.r = in.v;
-        out.g = in.v;
-        out.b = in.v;
-        return out;
-    }
-    hh = in.h;
-    if(hh >= 360.0) hh = 0.0;
-    hh /= 60.0;
-    i = (long)hh;
-    ff = hh - i;
-    p = in.v * (1.0 - in.s);
-    q = in.v * (1.0 - (in.s * ff));
-    t = in.v * (1.0 - (in.s * (1.0 - ff)));
+	HSV(double h, double s, double v)
+	{
+		H = h;
+		S = s;
+		V = v;
+	}
 
-    switch(i) {
-    case 0:
-        out.r = in.v;
-        out.g = t;
-        out.b = p;
-    case 1:
-        out.r = q;
-        out.g = in.v;
-        out.b = p;
-        break;
-    case 2:
-        out.r = p;
-        out.g = in.v;
-        out.b = t;
-        break;
+	bool Equals(HSV hsv)
+	{
+		return (H == hsv.H) && (S == hsv.S) && (V == hsv.V);
+	}
+};
 
-    case 3:
-        out.r = p;
-        out.g = q;
-        out.b = in.v;
-        break;
-    case 4:
-        out.r = t;
-        out.g = p;
-        out.b = in.v;
-        break;
-    case 5:
-    default:
-        out.r = in.v;
-        out.g = p;
-        out.b = q;
-        break;
-    }
-    return out;
+static RGB HSVToRGB(HSV hsv) {
+	double r = 0, g = 0, b = 0;
+
+	if (hsv.S == 0)
+	{
+		r = hsv.V;
+		g = hsv.V;
+		b = hsv.V;
+	}
+	else
+	{
+		int i;
+		double f, p, q, t;
+
+		if (hsv.H == 360)
+			hsv.H = 0;
+		else
+			hsv.H = hsv.H / 60;
+
+		i = (int)trunc(hsv.H);
+		f = hsv.H - i;
+
+		p = hsv.V * (1.0 - hsv.S);
+		q = hsv.V * (1.0 - (hsv.S * f));
+		t = hsv.V * (1.0 - (hsv.S * (1.0 - f)));
+
+		switch (i)
+		{
+		case 0:
+			r = hsv.V;
+			g = t;
+			b = p;
+			break;
+
+		case 1:
+			r = q;
+			g = hsv.V;
+			b = p;
+			break;
+
+		case 2:
+			r = p;
+			g = hsv.V;
+			b = t;
+			break;
+
+		case 3:
+			r = p;
+			g = q;
+			b = hsv.V;
+			break;
+
+		case 4:
+			r = t;
+			g = p;
+			b = hsv.V;
+			break;
+
+		default:
+			r = hsv.V;
+			g = p;
+			b = q;
+			break;
+		}
+
+	}
+
+	return RGB((float)(r * 255), (float)(g * 255), (float)(b * 255));
 }
 
 //OpenGL stuff
@@ -234,19 +230,14 @@ void drawPlanet()
     double dAngulo = 0;
     //For coloring
 
-    hsv initialColor;
-    rgb currentColor;
-    rgb previousColor;
-    initialColor.h = (int)initialHue % 360;
-    initialColor.s = initialSaturation/100.0;
-    initialColor.v = initialValue/100.0;
+    HSV initialColor(0,0,0);
+    RGB currentColor(0,0,0);
+    RGB previousColor(0,0,0);
+    initialColor.H = (int)initialHue % 360;
+    initialColor.S = initialSaturation/100.0;
+    initialColor.V = initialValue/100.0;
 
-    currentColor = hsv2rgb(initialColor);
-    initialColor.h += ratioHue;
-    if(initialColor.h > 360)
-        initialColor.h = 0;
-
-    glColor3f(currentColor.r, currentColor.g, currentColor.b);
+    currentColor = HSVToRGB(initialColor);
 
     /*
     Generacion esfera se divide en tres partes:
@@ -264,13 +255,13 @@ void drawPlanet()
 
     //  glColor3f(0.5, 0.399, 0.06);
      previousColor = currentColor;
-    initialColor.h += ratioHue;
-    if(initialColor.h > 360)
-        initialColor.h = 0;
+    initialColor.H += ratioHue;
+    if(initialColor.H > 360)
+        initialColor.H = 0;
 
-    currentColor = hsv2rgb(initialColor);
+    currentColor = HSVToRGB(initialColor);
 
-    glColor3f(previousColor.r, previousColor.g, previousColor.b);
+    glColor3f((int)previousColor.R/255.0, (int)previousColor.G/255.0, (int)previousColor.B/255.0);
     dXTemp = fRadioEsfera * cos(toRadians(90));
     dYTemp = 0;
     dZTemp = fRadioEsfera * sin(toRadians(90));
@@ -281,7 +272,7 @@ void drawPlanet()
     dPreviousX = (fRadioEsfera * cos(toRadians(90 - diffAnguloCirculo))) * cos(toRadians(dAngulo));
     dPreviousY = (fRadioEsfera * cos(toRadians(90 - diffAnguloCirculo))) * sin(toRadians(dAngulo));
     dPreviousZ =  fRadioEsfera * sin(toRadians(90 - diffAnguloCirculo));
-    glColor3f(currentColor.r, currentColor.g, currentColor.b);
+    glColor3f((int)currentColor.R/255.0, (int)currentColor.G/255.0, (int)currentColor.B/255.0);
     glVertex3f(dPreviousX, dPreviousY , dPreviousZ);
     dAngulo += diffAnguloFormula;
 
@@ -290,7 +281,7 @@ void drawPlanet()
         dCurrentX = (fRadioEsfera * cos(toRadians(90 - diffAnguloCirculo))) * cos(toRadians(dAngulo));
         dCurrentY = (fRadioEsfera * cos(toRadians(90 - diffAnguloCirculo))) * sin(toRadians(dAngulo));
         dCurrentZ = fRadioEsfera * sin(toRadians(90 - diffAnguloCirculo));
-        glColor3f(currentColor.r, currentColor.g, currentColor.b);
+        glColor3f((int)currentColor.R/255.0, (int)currentColor.G/255.0, (int)currentColor.B/255.0);
         glVertex3f(dCurrentX, dCurrentY, dCurrentZ);
         dAngulo += diffAnguloFormula;
         myObjFile <<"v " << dPreviousX << " " << dPreviousY << " " << dPreviousZ << "\n";
@@ -316,19 +307,23 @@ void drawPlanet()
     for(int i= 0; i < iDivisionesCirculo/2  -2; i++)
     {
         previousColor = currentColor;
-
-        if (randNum > noiseParameter)
-            initialColor.h += ratioHue;
+        double temp = randNums[i];
+        double currentNoise = noiseParameter;
+        if (temp > currentNoise)
+           initialColor.H += ratioHue;
         else
-            initialColor.h -= ratioHue;
-        if(initialColor.h > 360)
-            initialColor.h = 0;
-        currentColor = hsv2rgb(initialColor);
+            initialColor.H -= ratioHue;
+
+        if(initialColor.H > 360)
+            initialColor.H = 0;
+        if(initialColor.H < 0)
+            initialColor.H = 360;
+        currentColor = HSVToRGB(initialColor);
 
         angulo = 0;
         for (int j =  0; j < iDivisionesFormula; j++)
         {
-            glColor3f(currentColor.r, currentColor.g, currentColor.b);
+            glColor3f((int)currentColor.R/255.0, (int)currentColor.G/255.0, (int)currentColor.B/255.0);
             //Esquina superior izquierda quad
             dXTemp =(fRadioEsfera * cos(toRadians(omega)) * cos (toRadians(angulo)));
             dYTemp = (fRadioEsfera * cos(toRadians(omega)))*sin(toRadians(angulo));
@@ -339,7 +334,7 @@ void drawPlanet()
             myObjFile <<"v " << dXTemp << " " << dYTemp  << " " <<dZTemp << "\n";
 
 
-            glColor3f(previousColor.r, previousColor.g, previousColor.b);
+            glColor3f((int)previousColor.R/255.0, (int)previousColor.G/255.0, (int)previousColor.B/255.0);
             //Esquina inferior izquierda quad
             dXTemp = (fRadioEsfera * cos(toRadians(omega - diffAnguloCirculo)) * cos (toRadians(angulo)));
             dYTemp = (fRadioEsfera * cos(toRadians(omega -diffAnguloCirculo)))*sin(toRadians(angulo));
@@ -347,7 +342,7 @@ void drawPlanet()
             glVertex3f (dXTemp, dYTemp, dZTemp);
             myObjFile <<"v " << dXTemp << " " << dYTemp  << " " <<dZTemp << "\n";
 
-            glColor3f(previousColor.r, previousColor.g, previousColor.b);
+            glColor3f((int)previousColor.R/255.0, (int)previousColor.G/255.0, (int)previousColor.B/255.0);
             //Esquina inferior derecha quads
             dXTemp = (fRadioEsfera * cos(toRadians(omega - diffAnguloCirculo)) * cos (toRadians(angulo + diffAnguloFormula)));
             dYTemp = (fRadioEsfera * cos(toRadians(omega -diffAnguloCirculo)))*sin(toRadians(angulo + diffAnguloFormula));
@@ -356,7 +351,7 @@ void drawPlanet()
             glVertex3f (dXTemp,dYTemp, dZTemp);
             myObjFile <<"v " << dXTemp << " " << dYTemp  << " " <<dZTemp << "\n";
 
-            glColor3f(currentColor.r, currentColor.g, currentColor.b);
+            glColor3f((int)currentColor.R/255.0, (int)currentColor.G/255.0, (int)currentColor.B/255.0);
             //Esquina superior derecha quad0
             dXTemp = (fRadioEsfera * cos(toRadians(omega)) * cos (toRadians(angulo+ diffAnguloFormula)));
             dYTemp = (fRadioEsfera * cos(toRadians(omega)))*sin(toRadians(angulo + diffAnguloFormula));
@@ -375,11 +370,11 @@ void drawPlanet()
     glBegin(GL_TRIANGLE_FAN);
 
     previousColor = currentColor;
-    initialColor.h += ratioHue;
-    if(initialColor.h > 360)
-        initialColor.h = 0;
+    initialColor.H += ratioHue;
+    if(initialColor.H > 360)
+        initialColor.H = 0;
 
-    currentColor = hsv2rgb(initialColor);
+    currentColor = HSVToRGB(initialColor);
 
 
     //Punto inferior de la esfera
@@ -388,13 +383,13 @@ void drawPlanet()
     dXTemp = fRadioEsfera * cos(toRadians(-90));
     dYTemp = 0;
     dZTemp = fRadioEsfera * sin(toRadians(-90));
-    glColor3f(currentColor.r, currentColor.g, currentColor.b);
+    glColor3f((int)currentColor.R/255.0, (int)currentColor.G/255.0, (int)currentColor.B/255.0);
     glVertex3f(dXTemp, dYTemp, dZTemp );
 
     dPreviousX = (fRadioEsfera * cos(toRadians(-90 + diffAnguloCirculo))) * cos(toRadians(dAngulo));
     dPreviousY = (fRadioEsfera * cos(toRadians(-90 + diffAnguloCirculo))) * sin(toRadians(dAngulo));
     dPreviousZ = fRadioEsfera * sin(toRadians(-90 + diffAnguloCirculo));
-    glColor3f(previousColor.r, previousColor.g, previousColor.b);
+    glColor3f((int)previousColor.R/255.0, (int)previousColor.G/255.0, (int)previousColor.B/255.0);
     glVertex3f(dPreviousX, dPreviousY, dPreviousZ);
     dAngulo += diffAnguloFormula;
 
@@ -403,7 +398,7 @@ void drawPlanet()
         dCurrentX = (fRadioEsfera * cos(toRadians(-90 + diffAnguloCirculo))) * cos(toRadians(dAngulo));
         dCurrentY = (fRadioEsfera * cos(toRadians(-90 + diffAnguloCirculo))) * sin(toRadians(dAngulo));
         dCurrentZ = fRadioEsfera * sin(toRadians(-90 + diffAnguloCirculo));
-        glColor3f(previousColor.r, previousColor.g, previousColor.b);
+        glColor3f((int)previousColor.R/255.0, (int)previousColor.G/255.0, (int)previousColor.B/255.0);
         glVertex3f(dCurrentX, dCurrentY, dCurrentZ);
         dAngulo += diffAnguloFormula;
         myObjFile <<"v " << dPreviousX << " " << dPreviousY << " " << dPreviousZ << "\n";
@@ -445,11 +440,18 @@ void computePos(float deltaMove)
     z += deltaMove * lz * 0.4f;
 }
 
+void computeMov(float yMove) {
+    ly += yMove * 0.4f;
+}
+
 void renderScene(void)
 {
 
     if (deltaMove)
         computePos(deltaMove);
+
+    if (yMove)
+        computeMov(yMove);
 
     // Clear Color and Depth Buffers
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -463,7 +465,6 @@ void renderScene(void)
                 x+lx, ly,  z+lz,
                 0.0f, ly,  0.0f);
 
-    cout << "Edgar \n";
     glPushMatrix();
     glRotated(90, 1, 0, 0);
     glTranslatef(0.0f, 0.0f, - radio * 3);
@@ -478,20 +479,14 @@ void processNormalKeys(unsigned char key, int xx, int yy) {
     case 27:
         exit(0);
         break;
-    case 'q':if(!planetCreated) {
-        time_t result = time(nullptr);
-        //tm result2;
-        localtime(&result);
-        planetCreated = true;
-        randNum = (result * result) % 100;
-    }
+    case 'q':
         exit(0);
         break;
     case 'a':
-        ly += 1;
+        yMove += 1;
         break;
     case 'z':
-        ly -= 1;
+        yMove -= 1;
         break;
     default:
         break;
@@ -512,6 +507,19 @@ void pressKey(int key, int xx, int yy)
     }
 }
 
+void releaseNormalKeys(unsigned char key, int x, int y)
+{
+
+    switch (key)
+    {
+    case 'a':
+    case 'z':
+        yMove = 0;
+        break;
+    }
+
+}
+
 void releaseKey(int key, int x, int y)
 {
 
@@ -522,6 +530,7 @@ void releaseKey(int key, int x, int y)
         deltaMove = 0;
         break;
     }
+
 }
 
 void mouseMove(int x, int y)
@@ -579,19 +588,24 @@ int main(int argc, char **argv)
 
     //Change noise parameter
     noiseParameter = noiseParameter * 50;
-    if(noiseParameter < 0) {
-        noiseParameter = 100 - noiseParameter;
+    if(noiseParameter <= 0) {
+        noiseParameter = 100 + noiseParameter;
     }
 
     z = radio * 3;
     ly = 0.0001 + radio * 3;
 
     if(!planetCreated) {
+
         time_t result = time(nullptr);
         //tm result2;
         localtime(&result);
         planetCreated = true;
-        randNum = (result * result) % 100;
+        randNums.push_back((int)(pow(result, 4.0)/1000) % 100);
+        for(int i = 1; i < divisiones; i++){
+
+            randNums.push_back((int)(randNums[i-1] * randNums[i-1]) % 100);
+        }
     }
 
     // init GLUT and create window
@@ -608,6 +622,7 @@ int main(int argc, char **argv)
 
     glutIgnoreKeyRepeat(1);
     glutKeyboardFunc(processNormalKeys);
+    glutKeyboardUpFunc(releaseNormalKeys);
     glutSpecialFunc(pressKey);
     glutSpecialUpFunc(releaseKey);
     // here are the two new functions
